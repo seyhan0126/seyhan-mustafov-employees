@@ -8,32 +8,36 @@ import com.company.data.model.Project;
 import com.company.data.repo.EmployeeToProjectRepo;
 
 import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
+
 
 import static java.time.temporal.ChronoUnit.DAYS;
 
 public class EmployeeToProjectService {
-    private EmployeeToProjectRepo employeeToProjectRepo;
-    private List<EmployeeToProject> employeeToProjectList;
-    //imp of map key,value
-    private HashMap<String, Team> resultMap;
-    private int recordCount;
+
+    private final List<EmployeeToProject> employeeToProjectList;
 
     public EmployeeToProjectService(EmployeeToProjectRepo employeeToProjectRepo) {
-        this.employeeToProjectRepo = employeeToProjectRepo;
         this.employeeToProjectList = employeeToProjectRepo.getAllRecords();
-        this.recordCount = employeeToProjectList.size();
     }
 
-    public Team getTheBestTeam() {
-        this.resultMap = getAllTeams();
-        return resultMap.values().stream().max(Comparator.comparing(Team::getTogetherWorkDays)).get();
+    public List<Team> getTheBestTeam() {
+        Map<String, Team> teams = getAllTeams();
+        List<Team> bestTeams = new ArrayList<>();
+        Long maxDaysWorkedByTeam = teams.values().stream()
+                .map(Team::getTogetherWorkDays).max(Long::compareTo).get();
+
+        for (Map.Entry<String, Team> team : teams.entrySet()) {
+            if (maxDaysWorkedByTeam == team.getValue().getTogetherWorkDays()){
+                bestTeams.add(team.getValue());
+            }
+        }
+        return bestTeams;
     }
 
-    private HashMap<String, Team> getAllTeams() {
-        HashMap<String, Team> teamHashMap = new HashMap<>();
+    private Map<String, Team> getAllTeams() {
+        int recordCount = employeeToProjectList.size();
+        Map<String, Team> teamMap = new HashMap<>();
         EmployeeToProject firstEmployeeToProject = null;
         EmployeeToProject secondEmployeeToProject = null;
         for (int i = 0; i < recordCount; i++) {
@@ -49,22 +53,22 @@ public class EmployeeToProjectService {
                         int secondTeammateId = secondEmployeeToProject.getEmployee().getId();
                         String teamIdVersionOne = firstTeammateId + "-" + secondTeammateId;
                         String teamIdVersionTwo = secondTeammateId + "-" + firstTeammateId;
-                        if (!teamHashMap.containsKey(teamIdVersionOne)
-                                && !teamHashMap.containsKey(teamIdVersionTwo)) {
-                            teamHashMap.put(teamIdVersionOne, team);
+                        if (!teamMap.containsKey(teamIdVersionOne)
+                                && !teamMap.containsKey(teamIdVersionTwo)) {
+                            teamMap.put(teamIdVersionOne, team);
                         } else {
-                            updateTeam(teamHashMap, team, teamIdVersionOne, teamIdVersionTwo);
+                            updateTeam(teamMap, team, teamIdVersionOne, teamIdVersionTwo);
                         }
                     }
                 }
             }
         }
-        return teamHashMap;
+        return teamMap;
 
     }
 
-    private void updateTeam(HashMap<String, Team> teamHashMap, Team team, String key1, String key2) {
-        Team existedTeam = findFirstNotNull(teamHashMap.get(key1), teamHashMap.get(key2));
+    private void updateTeam(Map<String, Team> teamMap, Team team, String key1, String key2) {
+        Team existedTeam = teamMap.get(key1) != null ? teamMap.get(key1) : teamMap.get(key2);
         existedTeam.setTogetherWorkDays(existedTeam.getTogetherWorkDays() + team.getTogetherWorkDays());
         team.getProjects().stream().forEach(
                 p -> {
@@ -75,26 +79,13 @@ public class EmployeeToProjectService {
         );
     }
 
-    private Team findFirstNotNull(Team... teams) {
-        if (teams != null) {
-            Team[] teamArray = teams;
-            int size = teams.length;
-            for (int i = 0; i < size; i++) {
-                Team team = teamArray[i];
-                if (team != null)
-                    return team;
-            }
-        }
-        return null;
-    }
-
 
     private boolean isSameProject(EmployeeToProject record1, EmployeeToProject record2) {
         return record1.getProject().equals(record2.getProject());
     }
 
     private boolean hasNotWorkTogether(EmployeeToProject record1, EmployeeToProject record2) {
-        return   record1.getDateFrom().isAfter(record2.getDateTo())
+        return record1.getDateFrom().isAfter(record2.getDateTo())
                 || record2.getDateFrom().isAfter(record1.getDateTo());
     }
 
@@ -126,8 +117,7 @@ public class EmployeeToProjectService {
         } else {
             partnershipEndDate = employeeTwo.getDateTo();
         }
-        long countWorkDays = DAYS.between(partnershipStartDate, partnershipEndDate);
-        return countWorkDays;
+        return DAYS.between(partnershipStartDate, partnershipEndDate) + 1;
     }
 
 }
